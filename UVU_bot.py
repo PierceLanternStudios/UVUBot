@@ -11,22 +11,24 @@
 prefix = "!"            # Enter the bot prefix here (This will still be structured 
                         # towards hybrid commands, but this is required for sync)
 
-authorized_userIDs = [466365370006241302]       # This is a list of all user IDs (integers) who are authorized
-                                                # to use master administrator commands on this bot. This affects 
-                                                # who is allowed to set regular admin roles and user roles. 
+
             
 
 
 
 # Json storage variables
+global AdminRoles, UserRoles, RequireUserRole, VerboseConfirmations, authorized_userIDs
 
-global AdminRoles, UserRoles, RequireUserRole, VerboseConfirmations
-
-AdminRoles = []
-UserRoles = []
+AdminRoles = []                     # These values are set on startup via json import, if you want to change
+UserRoles = []                      # these settings go edit the file "BotSettings.json" instead.
 RequireUserRole = False      
 VerboseConfirmations = False         
 
+authorized_userIDs = [466365370006241302]       # This is a list of all user IDs (integers) who are authorized
+                                                # to use master administrator commands on this bot. This affects 
+                                                # who is allowed to set regular admin roles and user roles. To 
+                                                # set this, either edit the json file, or use the add/remove ID 
+                                                # commands for the purpose. This list exists just as a backup.  
 
     
 
@@ -95,7 +97,7 @@ async def sync(ctx):
     print("sync completed")
 
 
-@bot.command
+@bot.command(name="quit")
 async def quit(ctx):
    
     #ensure user is authorized to do this
@@ -105,10 +107,43 @@ async def quit(ctx):
    
     #quit
     await ctx.reply("shutting down.")
-    quit()
+    await bot.close()
 
+
+@bot.command(name="add_ID")
+async def Add_ID(ctx, ID:str):
+    
+    global authorized_userIDs
+    if ctx.author.id in authorized_userIDs:
+        authorized_userIDs.append(int(ID))
+        ctx.reply(f"ID {ID} added to authorized ID's")
+        return
+    
+    ctx.reply("Sorry, you aren't authorized to do that.")
+
+@bot.command(name="remove_ID")
+async def Remove_ID(ctx, ID:str):
+
+    global authorized_userIDs
+    if ctx.author.id in authorized_userIDs:
+        authorized_userIDs.append(int(ID))
+        ctx.reply(f"ID {ID} removed from authorized ID's")
+        return
+    
+    ctx.reply("Sorry, you aren't authorized to do that.")
+    return
 
 ### ========================= End Core Functionality  =================================
+
+
+
+
+
+
+
+
+
+
 
 
 ### =========================  Modal Classes  ===============================
@@ -152,11 +187,12 @@ async def on_ready():
     with open("BotSettings.json", "r") as f:
         try:
             data = json.load(f)
-            global AdminRoles, UserRoles, RequireUserRole, VerboseConfirmations
+            global AdminRoles, UserRoles, RequireUserRole, VerboseConfirmations, authorized_userIDs
             AdminRoles = data["AdminRoles"]
             UserRoles = data["UserRoles"]
             VerboseConfirmations = data['VerboseLogging']
             RequireUserRole = data["RequireUserRole"]
+            authorized_userIDs = data["AuthorizedIDs"]
         except:
            print("Error importing data.")
            return
@@ -276,6 +312,7 @@ async def ConfigureSettings(ctx):
             "UserRoles" : UserRoles,
             "VerboseLogging" : VerboseConfirmations,
             "RequireUserRole" : RequireUserRole,
+            "AuthorizedIDs" : authorized_userIDs, 
         }
     
     #write out
@@ -302,7 +339,7 @@ async def ConfigureSettings(ctx):
 #check if a given user is authorized to perform an action:
 def CheckAuthorization(author, RequiresAdmin:bool):
 
-    global AdminRoles, UserRoles, RequireUserRole, VerboseConfirmations
+    global AdminRoles, UserRoles, RequireUserRole, VerboseConfirmations, authorized_userIDs
    
     #first check if they are in the master op list:
     if author.id in authorized_userIDs:
@@ -310,7 +347,7 @@ def CheckAuthorization(author, RequiresAdmin:bool):
    
     #second check to see if they are in the list of approved roles:
     for i in author.roles:
-        if i.name in AdminRoles or i.permissions.administrator or (i.name in UserRoles and not RequiresAdmin):
+        if i.name in AdminRoles or i.permissions.administrator or (i.name in UserRoles and not RequiresAdmin) or (not RequireUserRole and not RequiresAdmin):
             return True
     
     #if neither check passed, return false
