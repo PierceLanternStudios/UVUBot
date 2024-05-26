@@ -118,6 +118,7 @@ class SettingsModal(discord.ui.Modal, title='Configure Settings'):
     AdminRolesStr = discord.ui.TextInput(label= "Extra bot admin roles (list w/ commas):",style=discord.TextStyle.long,required=False)
     UserRolesStr = discord.ui.TextInput(label= "Roles which can use the bot (list w/ commas):",style=discord.TextStyle.long,required=False)
 
+
     
     async def on_submit(self, interaction: discord.Interaction):
                 
@@ -128,7 +129,6 @@ class SettingsModal(discord.ui.Modal, title='Configure Settings'):
         elif str(self.RequireUserRoleStr).lower() in ["false", "fals", "f", "no", "n"]:
            RequireUserRole = False
         
-        print(str(self.VerboseConfirmationsStr))
         if str(self.VerboseConfirmationsStr).lower() in ["true", "tru", "t", "yes", "y"]:
             VerboseConfirmations = True
         elif str(self.VerboseConfirmationsStr).lower() in ["false", "fals", "f", "no", "n"]:
@@ -172,7 +172,7 @@ async def on_message(message):
 
     if "@1243987498007265301" in str(message.content):
 
-        await message.channel.send("you rang?")
+        global AdminRoles, UserRoles, RequireUserRole, VerboseConfirmations
         
         #get the best thing to call the person who sent the email
         authorname = ""
@@ -180,7 +180,19 @@ async def on_message(message):
             authorname = message.author.nick + f" ({message.author.name})"
         else:
             authorname = message.author.name
-        gmail_send_message(message.content.replace("<@1243987498007265301>", ""), authorname)
+
+
+        #check auth and send message
+        auth = CheckAuthorization(message.author, False)
+        if auth:
+            gmail_send_message(message.content.replace("<@1243987498007265301>", ""), authorname)
+
+            #check to see if we should log verbosely to what just happened or discretely
+            if VerboseConfirmations:
+               await message.channel.send("Mirrored email sent.")
+            else:
+               await message.add_reaction("📨")
+
         
 
 
@@ -193,11 +205,8 @@ async def on_message(message):
 ### =============================   Commands   =========================================
 
 @bot.hybrid_command(name = "email", description = "Used to forward a message to the email server!")
-async def email(ctx, message:str):
+async def email(ctx, subject: str, message:str):
 
-    #inform people that things have happened
-    await ctx.reply("emailed!")
-    print(message)
 
     #get the best thing to call the person who sent the email
     authorname = ""
@@ -206,7 +215,22 @@ async def email(ctx, message:str):
     else:
        authorname = ctx.author.name
 
-    email = gmail_send_message(message, authorname)
+    #check auth and send email
+    if CheckAuthorization(ctx.author, False):
+
+        #send the email
+        email = gmail_send_message(message, authorname, "UVU: " +subject)
+
+        #inform people that things have happened
+        await ctx.reply(f"\n**Subject: {subject}**\n{message}")
+    
+    # if they dont have auth:
+    else:
+       await ctx.reply("Sorry, you don't have permission to use this bot.", ephemeral = True)
+    
+    return  
+
+
 
     
 
@@ -224,13 +248,23 @@ async def ConfigureSettings(ctx):
     
 
     #get user settings input from the modal and reply with the details
-    await ctx.interaction.response.send_modal(SettingsModal())
+    settings_modal = SettingsModal()
+    await ctx.interaction.response.send_modal(settings_modal)
+    await settings_modal.wait()
+
 
     global AdminRoles, UserRoles, RequireUserRole, VerboseConfirmations
-    print(AdminRoles)
+
+    #format lists nicely:
+    AdminRolesText = ""
+    UserRolesText = ""
+    for i in AdminRoles: AdminRolesText += f"{i}, "
+    for i in UserRoles : UserRolesText += f"{i}, "
+
+    #generate embed
     embed = discord.Embed(title= ("Bot Settings"),  color= 62975,  timestamp = datetime.datetime.now(pytz.timezone("US/Eastern")))
-    embed.add_field(name="Admin Roles", value= AdminRoles,inline=False)    
-    embed.add_field(name="User Roles", value= UserRoles,inline=False)    
+    embed.add_field(name="Admin Roles", value= AdminRolesText[:-2],inline=False)    
+    embed.add_field(name="User Roles", value= UserRolesText[:-2],inline=False)    
     embed.add_field(name="Require User Role", value= str(RequireUserRole),inline=False)    
     embed.add_field(name="Verbose Logging", value = str(VerboseConfirmations),inline=False)  
 
@@ -249,7 +283,6 @@ async def ConfigureSettings(ctx):
         json.dump(data, outfile)
         print("[LOG]: Data written to outfile.")
 
-        print(AdminRoles)
 
     return
    
@@ -262,19 +295,14 @@ async def ConfigureSettings(ctx):
 
 
 
-### ========= Time loop task  ================
-@tasks.loop(hours = 24)
-async def TimeUpdater():
-    print("Performing daily update...")
 
-
-    # more daily functionality below here!
-
-### =========================   Permissions and JSON Recovery  ============================
+### =========================   Permissions  ============================
 
 
 #check if a given user is authorized to perform an action:
 def CheckAuthorization(author, RequiresAdmin:bool):
+
+    global AdminRoles, UserRoles, RequireUserRole, VerboseConfirmations
    
     #first check if they are in the master op list:
     if author.id in authorized_userIDs:
@@ -294,7 +322,7 @@ def CheckAuthorization(author, RequiresAdmin:bool):
 
 
 ###  ======================  Sending Emails  ====================================
-def gmail_send_message(emailcontent, user):
+def gmail_send_message(emailcontent, user, subject = None):
   """Create and send an email message
   Print the returned  message id
   Returns: Message object, including message id
@@ -303,6 +331,12 @@ def gmail_send_message(emailcontent, user):
   TODO(developer) - See https://developers.google.com/identity
   for guides on implementing OAuth2 for the application.
   """
+
+  #check if we were passed a subject in
+  if subject != None:
+      mail_subject = subject
+  else:
+     mail_subject = f"UVU: discord message from {user}"
 
 
     # AUTHENTICATION
@@ -347,7 +381,7 @@ def gmail_send_message(emailcontent, user):
 
     # === new way thats better because HTML
     discord_joinlink = "{link}"
-    mail_subject = f"UVU: discord message from {user}"
+    #mail subject is handled above
     mail_body = f'<p>UVU Discord announcement from {user}:</p>\
 <h3 style="padding-left: 40px;">{emailcontent}</h3>\
 <p style="padding-left: 40px;">~{user}</p>\

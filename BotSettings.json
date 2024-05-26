@@ -1,1 +1,1 @@
-{"AdminRoles": [], "UserRoles": [], "VerboseLogging": false, "RequireUserRole": false}
+{"AdminRoles": [""], "UserRoles": [""], "VerboseLogging": false, "RequireUserRole": false}
