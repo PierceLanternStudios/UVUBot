@@ -30,6 +30,13 @@ authorized_userIDs = [466365370006241302]       # This is a list of all user IDs
                                                 # set this, either edit the json file, or use the add/remove ID 
                                                 # commands for the purpose. This list exists just as a backup.  
 
+
+
+AnnouncementChannelID = 1246585450534273115                 # Channel ID of the annoucement channel in the UVU server
+
+ForwardEmailAddresses = ["pierceclark07@gmail.com"]         # This is a list of whitelisted email addresses which will forward to the UVU 
+                                                            # discord server whenever a new email is received.
+
     
 
 
@@ -44,6 +51,7 @@ from discord.ext import commands, tasks
 import datetime
 import pytz
 import json
+from bs4 import BeautifulSoup as bs
 
 # google packages
 import os
@@ -329,6 +337,20 @@ async def ConfigureSettings(ctx):
 
 
 
+@bot.command(name = "ce")
+async def CheckForNewEmails(ctx):
+
+
+    print("Checking for new emails...")
+    await ctx.reply("Checking for new emails now!")
+
+    await CheckForNewEmails()
+
+
+
+
+
+
 
 
 
@@ -377,7 +399,7 @@ def gmail_send_message(emailcontent, user, subject = None):
 
 
     # AUTHENTICATION
-  SCOPES = ["https://www.googleapis.com/auth/userinfo.email","https://www.googleapis.com/auth/gmail.modify"]
+  SCOPES = ["https://mail.google.com"]
   creds = None
   # The file token.json stores the user's access and refresh tokens, and is
   # created automatically when the authorization flow completes for the first
@@ -457,6 +479,132 @@ def gmail_send_message(emailcontent, user, subject = None):
   return send_message
 
 
+
+
+
+
+### ======================  Receiving Emails + Task Loop  =========================
+
+# Task loop to check for new emails
+@tasks.loop(minutes=1)
+async def CheckForNewEmails():
+
+    # AUTHENTICATION
+    SCOPES = ["https://mail.google.com"]
+    creds = None
+    # The file token.json stores the user's access and refresh tokens, and is
+    # created automatically when the authorization flow completes for the first
+    # time.
+    if os.path.exists("token.json"):
+        creds = Credentials.from_authorized_user_file("token.json", SCOPES)
+    # If there are no (valid) credentials available, let the user log in.
+    if not creds or not creds.valid:
+        if creds and creds.expired and creds.refresh_token:
+            creds.refresh(Request())
+        else:
+            flow = InstalledAppFlow.from_client_secrets_file(
+            "credentials.json", SCOPES
+        )
+        creds = flow.run_local_server(port=0)
+        # Save the credentials for the next run
+        with open("token.json", "w") as token:
+            token.write(creds.to_json())
+
+
+
+        #make the client and stuff
+
+    service = build("gmail", "v1", credentials=creds)
+    unreadmsgs = service.users().messages().list(userId = "me", labelIds = ["INBOX", "UNREAD"]).execute()
+
+    #return cases where we have no new messages
+    if unreadmsgs["resultSizeEstimate"] == 0 or unreadmsgs == None:
+        return
+    
+    #and now if we do have unread messages:
+    msg_list = unreadmsgs["messages"]
+
+    print("\n")
+    for msg in msg_list:
+        msg_id = msg["id"]
+        fullmessage = service.users().messages().get(userId = "me", id = msg_id).execute()
+        payload = fullmessage["payload"]
+        headers = payload["headers"]
+
+        for i in headers:
+            if i["name"] == "Subject":
+                msgSubject = i["value"]
+                #print(f"Subject: {i['value']}")
+
+            if i["name"] == "From":
+                msgFrom = i['value']
+                #print(f"From: {i['value']}")
+
+            
+        mssg_parts = payload['parts'] # fetching the message parts
+        part_one  = mssg_parts[0] # fetching first element of the part 
+        part_body = part_one['body'] # fetching body of the message
+        part_data = part_body['data'] # fetching data from the body
+        clean_one = part_data.replace("-","+") # decoding from Base64 to UTF-8
+        clean_one = clean_one.replace("_","/") # decoding from Base64 to UTF-8
+        clean_two = base64.b64decode (bytes(clean_one, 'UTF-8')) # decoding from Base64 to UTF-8
+        soup = bs(clean_two , "lxml" )
+        mssg_body = str(soup.body())[4:-5]
+
+        #mark the message as read
+        #service.users().messages().modify(userId='me', id=msg_id, body={'removeLabelIds': ['UNREAD']}).execute()
+
+
+        #print(f"Message Body: {mssg_body}")
+
+
+        #check to see if sender is authorized, and if so send discord ping:
+        for i in ForwardEmailAddresses:
+            if i in msgFrom:
+                print("message authorized!")
+
+                await FormatEmailForDiscord(msgSubject, mssg_body)
+
+
+
+        print("\n")
+
+
+
+
+
+async def FormatEmailForDiscord(Subject:str, Message:str):
+
+    if len(Message) <1000:
+        embed = discord.Embed(title= ("Email Announcement"),  color= 62975,  timestamp = datetime.datetime.now(pytz.timezone("US/Eastern")))
+        embed.add_field(name=f"Subject: {Subject}", value= Message,inline=False)
+        embed.set_footer(text = "This message generated automatically from the UVU email server.")  
+
+        await bot.get_channel(AnnouncementChannelID).send(embed= embed)
+
+    else:
+        
+
+        print("iterating to find break point:")
+        #iterate backwards from 1000 characters to find \n, then print up to that point:
+        Iterating = True
+        CharactersToInclude = 1000
+        breakCharacters = [". ", ".\r", ").", ".\n", ]
+        while CharactersToInclude > 0:
+
+            #check if we're on a line break:
+            print(repr(Message[CharactersToInclude:CharactersToInclude+2]))
+
+            if Message[CharactersToInclude:CharactersToInclude+2] in breakCharacters:
+                CharactersToInclude+=1
+                break
+
+            #else go down one character
+            CharactersToInclude -= 1
+
+        
+        print(f"\nTotal Message: {Message}")
+        print(f"\nFirst 1k ({CharactersToInclude}): {Message[:CharactersToInclude]}")
 
 
 
