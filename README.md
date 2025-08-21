@@ -11,32 +11,32 @@ bot does, read on below!
 This bot does two primary things. First, it can forward emails sent to it into discord channels,
 to keep the discord people in the loop with announcements. Secondly, it can "promote" discord
 messages to emails: Specifically, when sending a discord message, you can choose to also send that
-message as an email to the UVU Community. This last feature is slightly less helpful, but all the 
-functionality for it exists, so it can be used at any time. However, since there isn't a huge 
-demand for it at the moment, I've disabled the feature to prevent abuse. With that said, I can 
+message as an email to the UVU Community. This last feature is slightly less helpful, but all the
+functionality for it exists, so it can be used at any time. However, since there isn't a huge
+demand for it at the moment, I've disabled the feature to prevent abuse. With that said, I can
 enable it at any time, and theres a pretty extensive permission system put in place for added
 security. For more details about that part, see below.
 
 ## Forwarding Emails to Discord:
 
 Forwarding emails to Discord is pretty straightforward. Under the hood, the bot maintains a list
-of "Routes". These routes map an email address to a Discord channel ID. When the bot receives an 
-email, if the sender is recognized on a route, then the message will be automatically forwarded 
-to the corresponding channel. Note that each email address can only map to one channel, and not 
-multiple! In practice this is not that much of a limitation however, since all messages sent in 
-a Google Group actually "send" from a single unified address (for example, 
-"uppervalleyultimate@googlegroups.com), even if the actual sender is a personal address. Thus, 
+of "Routes". These routes map an email address to a Discord channel ID. When the bot receives an
+email, if the sender is recognized on a route, then the message will be automatically forwarded
+to the corresponding channel. Note that each email address can only map to one channel, and not
+multiple! In practice this is not that much of a limitation however, since all messages sent in
+a Google Group actually "send" from a single unified address (for example,
+"uppervalleyultimate@googlegroups.com), even if the actual sender is a personal address. Thus,
 the actual limitation here is just that each Google Group the bot is a part of can only send to
 at most one channel. However, if you want, you can also add routes for personal emails to specific
 channels, and you can double-up on channels if you'd like (i.e. two addresses to the same channel).
-In order to "receive" these emails, the email must include "UVUbot@gmail.com" in the list of 
-senders: this works if the bot is included as a member of the group, or if you send it a direct 
-email. 
+In order to "receive" these emails, the email must include "UVUbot@gmail.com" in the list of
+senders: this works if the bot is included as a member of the group, or if you send it a direct
+email.
 
 ### Modifying Routes:
 
-To modify routes, three hybrid commands are made available: "addroute", "removeroute", and 
-"listroutes". All three of these can be used with the Discord slash command system. The first 
+To modify routes, three hybrid commands are made available: "addroute", "removeroute", and
+"listroutes". All three of these can be used with the Discord slash command system. The first
 two of these commands require at least bot-admin permissions: see below on the details for that.
 Here is a description of what each command does:
 
@@ -49,33 +49,31 @@ Here is a description of what each command does:
 
     - removeroute {email}
         This command is used to remove a route from the bot settings, preventing future
-        emails from being forwarded to the corresponding channel. This command requires as 
-        an argument the email to remove. Be careful, because the string is case-sensitive! 
-        The email you enter and the email listed from the "listroutes" command must match 
-        exactly for the command to work. 
+        emails from being forwarded to the corresponding channel. This command requires as
+        an argument the email to remove. Be careful, because the string is case-sensitive!
+        The email you enter and the email listed from the "listroutes" command must match
+        exactly for the command to work.
 
     - listroutes
         This command will generate a list of all currently tracked routes, and display them
         in the channel where the command was invoked. This command is the only one of these
-        three that does not require any permissions to use. 
-
+        three that does not require any permissions to use.
 
 ### Getting Discord Channel IDs:
-To add a route above, you'll need to find the Discord channel ID of the channel you want to 
-send to. To do this, the easiest way to get it is to enable "Developer Options" in Discord 
-settings. Then, you can get the channel ID by right-clicking on the channel and selecting the
-"Copy Channel ID" option from the drop down. There's also a bunch of documentation on this 
-on the web, so I recommend googling it if you get stuck. Finally, you can also ask someone else
-or (in the worst case) email me if you run into problems. 
 
+To add a route above, you'll need to find the Discord channel ID of the channel you want to
+send to. To do this, the easiest way to get it is to enable "Developer Options" in Discord
+settings. Then, you can get the channel ID by right-clicking on the channel and selecting the
+"Copy Channel ID" option from the drop down. There's also a bunch of documentation on this
+on the web, so I recommend googling it if you get stuck. Finally, you can also ask someone else
+or (in the worst case) email me if you run into problems.
 
 ### Super-Sender Configuration
+
 As an additional feature, there is a hard-coded list of email addresses that can be configured
 to have forwarding priveledges to a hard-coded channel ID, that exists outside the scope of the
-routing system. Currently this is **disabled**, but if there ever arises a need for extra ways to 
-send priority emails to a channel, that can be done here. 
-        
-
+routing system. Currently this is **disabled**, but if there ever arises a need for extra ways to
+send priority emails to a channel, that can be done here.
 
 ## Forwarding Discord to Email:
 
