@@ -17,12 +17,13 @@ prefix = "!"            # Enter the bot prefix here (This will still be structur
 
 
 # Json storage variables
-global AdminRoles, UserRoles, RequireUserRole, VerboseConfirmations, authorized_userIDs
+global AdminRoles, UserRoles, RequireUserRole, VerboseConfirmations, authorized_userIDs, Routes
 
 AdminRoles = []                     # These values are set on startup via json import, if you want to change
-UserRoles = []                      # these settings go edit the file "BotSettings.json" instead.
+UserRoles = []                      # these settings go edit the file "BotSettings.json" or "Routes.json" instead.
 RequireUserRole = False      
-VerboseConfirmations = False         
+VerboseConfirmations = False 
+Routes = {}
 
 authorized_userIDs = [466365370006241302]       # This is a list of all user IDs (integers) who are authorized
                                                 # to use master administrator commands on this bot. This affects 
@@ -32,7 +33,7 @@ authorized_userIDs = [466365370006241302]       # This is a list of all user IDs
 
 
 
-AnnouncementChannelID = 1246585450534273115                 # Channel ID of the annoucement channel in the UVU server
+AnnouncementChannelID = 1246585450534273115                 # Channel ID of the whitelisted-user annoucement channel in the UVU server
 
 ForwardEmailAddresses = ["pierceclark07@gmail.com"]         # This is a list of whitelisted email addresses which will forward to the UVU 
                                                             # discord server whenever a new email is received.
@@ -52,6 +53,7 @@ import datetime
 import pytz
 import json
 from bs4 import BeautifulSoup as bs
+import re
 
 # google packages
 import os
@@ -132,6 +134,11 @@ async def Add_ID(ctx, ID:str):
 @bot.command(name="remove_ID")
 async def Remove_ID(ctx, ID:str):
 
+    # protect my own ID because I developed the bot:
+    if int(ID) == 466365370006241302:
+        ctx.reply("Sorry, you aren't authorized to do that. Contact Pierce for more details.")
+        return
+
     global authorized_userIDs
     if ctx.author.id in authorized_userIDs:
         authorized_userIDs.append(int(ID))
@@ -185,11 +192,40 @@ class SettingsModal(discord.ui.Modal, title='Configure Settings'):
 
 
 
+
+
+
+### ============================  Route Management   ===================================
+    
+### Import Routes from JSON into Data:
+async def importRoutes():
+    try:
+        with open("Routes.json", "r") as f:
+            global Routes
+            Routes = json.load(f)
+            print("Routes Imported")
+    except:
+        print("Error: Failed to import Routes")
+
+
+#Write out Routes data to settings file:
+async def exportRoutes():
+    global Routes
+    with open("Routes.json", "w") as outfile:
+        json.dump(Routes, outfile)
+        print("[LOG]: Data written to Routes outfile.")
+
+
+
+
+
 ### ============================  Events   ===================================
 @bot.event
 async def on_ready():
     await bot.change_presence(activity=discord.Activity(name="Status goes here"))
     print("[LanternUBC]: UVUBot online and running.")
+
+    await importRoutes()
 
     #import settings
     with open("BotSettings.json", "r") as f:
@@ -201,12 +237,12 @@ async def on_ready():
             VerboseConfirmations = data['VerboseLogging']
             RequireUserRole = data["RequireUserRole"]
             authorized_userIDs = data["AuthorizedIDs"]
+            print("Settings Imported")
         except:
            print("Error importing data.")
            return
 
         
-        print("Settings Imported")
 
 
 
@@ -214,6 +250,7 @@ async def on_ready():
 @bot.event
 async def on_message(message):
 
+    # this is the @mention of the bot itself
     if "@1243987498007265301" in str(message.content):
 
         global AdminRoles, UserRoles, RequireUserRole, VerboseConfirmations
@@ -336,11 +373,12 @@ async def ConfigureSettings(ctx):
 
 
 
-
+# A small helper (NON HYBRID) command to force an email check.
+# This process is on a task loop anyway (and will be completed
+# automatically every minute), but in case you want to quickly 
+# force one without waiting for that, this tool is available.
 @bot.command(name = "ce")
 async def CheckForNewEmails(ctx):
-
-
     print("Checking for new emails...")
     await ctx.reply("Checking for new emails now!")
 
@@ -349,7 +387,59 @@ async def CheckForNewEmails(ctx):
 
 
 
+# A command used to remove routes
+@bot.hybrid_command(name = "addroute", description="Add an email-to-discord forwarding route.")
+async def addroute(ctx, email:str, channel_id:str):
 
+    if not CheckAuthorization(ctx.author, False):
+        await ctx.reply("Error: You are not authorized to perform this action. Contact an admin/dev for help.")
+        return
+
+    # ensure they formatted the Channel ID correctly
+    if not channel_id.isdigit():
+        await ctx.reply("Error: Make sure your 'Channel' field is the target channel ID number! Please contact an admin/dev for details.")
+        return
+
+    # if all checks pass, Add the route to the Route object and write out
+    global Routes
+    Routes[email] = channel_id
+    await ctx.reply(f"New email route added: `{email}` → <#{channel_id}>")
+    await exportRoutes()
+
+
+
+
+# A command used to remove routes
+@bot.hybrid_command(name = "removeroute", description="Add an email-to-discord forwarding route.")
+async def removeroute(ctx, email:str):
+
+    if not CheckAuthorization(ctx.author, False):
+        await ctx.reply("Error: You are not authorized to perform this action. Contact an admin/dev for help.")
+        return
+
+    # double check that we actually have a route with that email:
+    global Routes
+    if email not in Routes.keys():
+        await ctx.reply("Error: No route found with that email address.")
+        return
+
+    # if all checks pass, remove the route to the Route object and write out
+    await ctx.reply(f"Email route removed: `{email}` → <#{Routes.pop(email)}>")
+    await exportRoutes()
+
+
+
+# List Route data in embed:
+@bot.hybrid_command(name="listroutes", description="List all the current email routing data.", alias=["lr", "listroute", "list"])
+async def listroutes(ctx):
+    global Routes
+
+    #generate an embed:
+    embed = discord.Embed(title="Email Routing Status:", color=discord.Colour.red(), timestamp= datetime.datetime.now())
+    for i in Routes.keys():
+        embed.add_field(name=f"{i} → <#{Routes[i]}>", value="")
+
+    await ctx.reply("Here are the currently tracked Routes:", embed=embed)
 
 
 
@@ -550,6 +640,9 @@ async def CheckForNewEmails():
         clean_two = base64.b64decode (bytes(clean_one, 'UTF-8')) # decoding from Base64 to UTF-8
         soup = bs(clean_two , "lxml" )
         mssg_body = str(soup.body())[4:-5]
+        body_string = clean_two.decode('utf-8')
+
+        
 
         #mark the message as read
         #service.users().messages().modify(userId='me', id=msg_id, body={'removeLabelIds': ['UNREAD']}).execute()
@@ -558,53 +651,75 @@ async def CheckForNewEmails():
         #print(f"Message Body: {mssg_body}")
 
 
-        #check to see if sender is authorized, and if so send discord ping:
+        #check to see if email address is stored in a Route, and if so send discord ping:
+        global Routes
+        for i in Routes.keys():
+            if i in msgFrom:
+                await FormatEmailForDiscord(msgSubject, body_string, int(Routes[i]))
+                return
+
+
+        # Otherwise check for a super-sender:
         for i in ForwardEmailAddresses:
             if i in msgFrom:
-                print("message authorized!")
-
-                await FormatEmailForDiscord(msgSubject, mssg_body)
-
-
-
-        print("\n")
+                await FormatEmailForDiscord(msgSubject, body_string)
 
 
 
 
 
-async def FormatEmailForDiscord(Subject:str, Message:str):
 
-    if len(Message) <1000:
-        embed = discord.Embed(title= ("Email Announcement"),  color= 62975,  timestamp = datetime.datetime.now(pytz.timezone("US/Eastern")))
-        embed.add_field(name=f"Subject: {Subject}", value= Message,inline=False)
-        embed.set_footer(text = "This message generated automatically from the UVU email server.")  
+async def FormatEmailForDiscord(Subject:str, Message:str, channelID: int = None):
 
-        await bot.get_channel(AnnouncementChannelID).send(embed= embed)
+    # format message to display reply-lines correctly:
+    pattern = re.compile(r'(?m)^[ \t]*>[ \t]*(?:\r)?$', flags=re.MULTILINE)
+    Message = pattern.sub('> ', Message) 
+    Message = re.sub(r'> $', "", Message)
 
-    else:
-        
 
-        print("iterating to find break point:")
-        #iterate backwards from 1000 characters to find \n, then print up to that point:
-        Iterating = True
-        CharactersToInclude = 1000
-        breakCharacters = [". ", ".\r", ").", ".\n", ]
-        while CharactersToInclude > 0:
+    # chunk long messages to split into embeds
+    chunks = [Message[i:i+1000] for i in range(0, len(Message), 1000)]
 
-            #check if we're on a line break:
-            print(repr(Message[CharactersToInclude:CharactersToInclude+2]))
+    # iterate over each chunk by 12 characters to try and find a better split point
+    for idx, chunk in enumerate(chunks): 
+        if idx == len(chunks) - 1:      # on the last chunk, can't move any characters forward
+            break
 
-            if Message[CharactersToInclude:CharactersToInclude+2] in breakCharacters:
-                CharactersToInclude+=1
+
+        for charIdx in range(1,20):       # step over 20 characters:
+            if chunk[-charIdx] == " " or chunk[-charIdx] == '\n':
+                chunks[idx + 1] = chunk[-charIdx:] + chunks[idx + 1]
+                chunks[idx] = chunk[:-charIdx]
                 break
 
-            #else go down one character
-            CharactersToInclude -= 1
+
+    # generate first embed:
+    color = discord.Colour.random()
+    embed = discord.Embed(title=Subject, color= color)
+    embed.add_field(name="", value=chunks[0])
+
+
+    embeds=[embed]
+    for idx, chunk in enumerate(chunks[1:]):
+        if idx == len(chunks) - 2:
+            newEmbed = discord.Embed(color= color, timestamp= datetime.datetime.now())
+            newEmbed.set_footer(text = "This message generated automatically from the UVU email server.")  
+        else:
+            newEmbed = discord.Embed(color= color)
+        newEmbed.add_field(name="", value=chunk)
+        embeds.append(newEmbed)
+
+
+    if channelID == None:
+        await bot.get_channel(AnnouncementChannelID).send(embeds= embeds)
+
+    else:
+        await bot.get_channel(channelID).send(embeds= embeds)
+
+
+
 
         
-        print(f"\nTotal Message: {Message}")
-        print(f"\nFirst 1k ({CharactersToInclude}): {Message[:CharactersToInclude]}")
 
 
 
