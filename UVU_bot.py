@@ -367,6 +367,11 @@ async def ConfigureSettings(ctx):
 
 
     return
+
+
+@bot.hybrid_command(name="help", description="Bot kickstart guide")
+async def help(ctx):
+    await ctx.reply("To get started using this bot, please read the documentation found at https://github.com/PierceLanternStudios/UVUBot.")
    
 
 
@@ -435,7 +440,7 @@ async def listroutes(ctx):
     global Routes
 
     #generate an embed:
-    embed = discord.Embed(title="Email Routing Status:", color=discord.Colour.red(), timestamp= datetime.datetime.now())
+    embed = discord.Embed(title="Email Routing Status:", color=discord.Colour.red(), timestamp= datetime.datetime.now(), inline=False2)
     for i in Routes.keys():
         embed.add_field(name=f"{i} → <#{Routes[i]}>", value="")
 
@@ -645,10 +650,7 @@ async def CheckForNewEmails():
         
 
         #mark the message as read
-        #service.users().messages().modify(userId='me', id=msg_id, body={'removeLabelIds': ['UNREAD']}).execute()
-
-
-        #print(f"Message Body: {mssg_body}")
+        service.users().messages().modify(userId='me', id=msg_id, body={'removeLabelIds': ['UNREAD']}).execute()
 
 
         #check to see if email address is stored in a Route, and if so send discord ping:
@@ -676,6 +678,9 @@ async def FormatEmailForDiscord(Subject:str, Message:str, channelID: int = None)
     Message = pattern.sub('> ', Message) 
     Message = re.sub(r'> $', "", Message)
 
+    # delete the UVU footer data:
+    Message = re.sub(r'Connect with us on discord!.*', "", Message, flags=re.DOTALL)
+
 
     # chunk long messages to split into embeds
     chunks = [Message[i:i+1000] for i in range(0, len(Message), 1000)]
@@ -699,6 +704,7 @@ async def FormatEmailForDiscord(Subject:str, Message:str, channelID: int = None)
     embed.add_field(name="", value=chunks[0])
 
 
+    # Generate all the other embeds (include the last one, which includes the footer + timestamp)
     embeds=[embed]
     for idx, chunk in enumerate(chunks[1:]):
         if idx == len(chunks) - 2:
@@ -710,6 +716,7 @@ async def FormatEmailForDiscord(Subject:str, Message:str, channelID: int = None)
         embeds.append(newEmbed)
 
 
+    # Send the message to the corresponding channel
     if channelID == None:
         await bot.get_channel(AnnouncementChannelID).send(embeds= embeds)
 
